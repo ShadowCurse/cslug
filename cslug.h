@@ -67,6 +67,17 @@ CSLUG_DEF void cslug_build_glyph_for_buffer(stbtt_fontinfo *info, cslug_u32 code
 #ifdef CSLUG_IMPLEMENTATION
 
 #define CSLUG_EPS (1.0f / 1024.0f)
+
+#ifndef CSLUG_fminf
+#include <math.h>
+#define CSLUG_fminf(a, b) fminf(a, b)
+#endif
+
+#ifndef CSLUG_fmaxf
+#include <math.h>
+#define CSLUG_fmaxf(a, b) fmaxf(a, b)
+#endif
+
 #include <math.h>
 
 CSLUG_DEF void cslug_free_buffers(stbtt_fontinfo *info, cslug_buffers *buffers) {
@@ -88,7 +99,7 @@ static void cslug_buf_ensure_capacity(stbtt_fontinfo *info, cslug_buf_f16 *buf, 
 
         cslug_f16 *new_ptr = (cslug_f16*)STBTT_malloc(new_capacity * sizeof(cslug_f16), info->userdata);
         if (buf->ptr) {
-            memcpy(new_ptr, buf->ptr, buf->len * sizeof(cslug_f16));
+            STBTT_memcpy(new_ptr, buf->ptr, buf->len * sizeof(cslug_f16));
             STBTT_free(buf->ptr, info->userdata);
         }
         buf->ptr = new_ptr;
@@ -109,8 +120,8 @@ static void cslug_buf_ensure_capacity(stbtt_fontinfo *info, cslug_buf_f16 *buf, 
 
 #define cslug_buf_add_curve(buf, curve, n) cslug_buf_add(cslug_f16, buf, cslug_f32, curve, 6, n)
 
-static cslug_f32 cslug_fmin3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return fminf(fminf(a, b), c); }
-static cslug_f32 cslug_fmax3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return fmaxf(fmaxf(a, b), c); }
+static cslug_f32 cslug_fmin3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return CSLUG_fminf(CSLUG_fminf(a, b), c); }
+static cslug_f32 cslug_fmax3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return CSLUG_fmaxf(CSLUG_fmaxf(a, b), c); }
 
 static cslug_u32 cslug_is_horizontal(const cslug_curve *c) {
     return fabsf(c->p1y - c->p2y) < CSLUG_EPS && fabsf(c->p2y - c->p3y) < CSLUG_EPS;
