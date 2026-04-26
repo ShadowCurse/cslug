@@ -3,12 +3,20 @@
 Single header implementation of a preprocessing step for the Slug text rendering algorithm.
 Relies the `stb_truetype.h` for font parsing and curve retrieval.
 
-## Example
+Minimal `cslug.c` to compile into a library
 
-The example uses `raylib` to open a window and run opengl shaders. Shaders are a slightly
+```c
+#define STB_TRUETYPE_IMPLEMENTATION
+#define CSLUG_IMPLEMENTATION
+#include "cslug.h"
+```
+
+## Examples
+
+Examples uses `raylib` to open a window and run opengl shaders. Shaders are a slightly
 modified versions of [original](https://github.com/EricLengyel/Slug) shaders.
 
-### Build example
+### Build examples
 
 First build `raylib` since the buffer example requires `GRAPHICS_API_OPENGL_43` to be used.
 
