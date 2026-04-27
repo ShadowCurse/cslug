@@ -206,7 +206,7 @@ static cslug_u32 cslug_is_vertical(const cslug_curve *c) {
 }
 
 // for small arrays it is good enough
-static void cslug_sort_ascend(cslug_u32 *idx, cslug_f32 *m, cslug_u32 cnt) {
+static void cslug_sort_descend(cslug_u32 *idx, cslug_f32 *m, cslug_u32 cnt) {
     if (cnt) {
       for (cslug_u32 i = 0; i < cnt - 1; i++) {
           for (cslug_u32 j = i + 1; j < cnt; j++) {
@@ -335,7 +335,7 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
                 }                                                                                     \
             }                                                                                         \
         }                                                                                             \
-        cslug_sort_ascend(band_indexes, band_maximums, cnt);                                          \
+        cslug_sort_descend(band_indexes, band_maximums, cnt);                                         \
         cslug_u32 off = (buffers->bands.len - band_hdr_offset) / (BAND_STRIDE);                       \
         cslug_u32 hi  = band_hdr_offset + b * (BAND_STRIDE);                                          \
         buffers->bands.ptr[hi + 0] = U32_TO_BAND_TYPE(cnt);                                           \
@@ -365,7 +365,7 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
                 }                                                                                     \
             }                                                                                         \
         }                                                                                             \
-        cslug_sort_ascend(band_indexes, band_maximums, cnt);                                          \
+        cslug_sort_descend(band_indexes, band_maximums, cnt);                                         \
         cslug_u32 off = (buffers->bands.len - band_hdr_offset) / (BAND_STRIDE);                       \
         cslug_u32 hi  = band_hdr_offset + (n_hbands + b) * (BAND_STRIDE);                             \
         buffers->bands.ptr[hi + 0] = U32_TO_BAND_TYPE(cnt);                                           \
