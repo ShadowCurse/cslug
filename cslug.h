@@ -107,18 +107,15 @@ static void cslug_buf_ensure_capacity(stbtt_fontinfo *info, cslug_buf_f16 *buf, 
     }
 }
 
-#define cslug_buf_add(BUF_TYPE, buf, ITEMS_TYPE, items, n_items, n)      \
-{                                                                        \
-    for (cslug_u32 __i = 0; __i < n_items; __i++) {                      \
-        buf.ptr[buf.len + __i] = (BUF_TYPE)*((ITEMS_TYPE*)&items + __i); \
-    }                                                                    \
-    for (cslug_u32 __i = n_items; __i < n; __i++) {                      \
-        buf.ptr[buf.len + __i] = (BUF_TYPE)0;                            \
-    }                                                                    \
-    buf.len += n;                                                        \
-}                                                                        \
-
-#define cslug_buf_add_curve(buf, curve, n) cslug_buf_add(cslug_f16, buf, cslug_f32, curve, 6, n)
+static void cslug_buf_add_curve(cslug_buf_f16 *buf, cslug_curve curve, cslug_u32 n) {
+    for (cslug_u32 i = 0; i < 6; i++) {
+        buf->ptr[buf->len + i] = (cslug_f16)*((cslug_f32*)&curve + i);
+    }
+    for (cslug_u32 i = 6; i < n; i++) {
+        buf->ptr[buf->len + i] = (cslug_f16)0;
+    }
+    buf->len += n;
+}
 
 static cslug_f32 cslug_fmin3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return CSLUG_fminf(CSLUG_fminf(a, b), c); }
 static cslug_f32 cslug_fmax3(cslug_f32 a, cslug_f32 b, cslug_f32 c) { return CSLUG_fmaxf(CSLUG_fmaxf(a, b), c); }
@@ -221,7 +218,7 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
     cslug_u32 *curve_indexes = (cslug_u32*)STBTT_malloc(n_curves * sizeof(cslug_u32), info->userdata);\
     for (cslug_u32 ci = 0; ci < n_curves; ci++) {                                                     \
         curve_indexes[ci] = buffers->curves.len / ((CURVE_STRIDE) / 2);                               \
-        cslug_buf_add_curve(buffers->curves, curves[ci], (CURVE_STRIDE));                             \
+        cslug_buf_add_curve(&buffers->curves, curves[ci], (CURVE_STRIDE));                            \
     }                                                                                                 \
                                                                                                       \
     cslug_f32 glyph_width  = glyph->x1 - glyph->x0;                                                   \
