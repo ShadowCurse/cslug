@@ -78,8 +78,6 @@ CSLUG_DEF void cslug_build_glyph_for_buffer(stbtt_fontinfo *info, cslug_u32 code
 #define CSLUG_fmaxf(a, b) fmaxf(a, b)
 #endif
 
-#include <math.h>
-
 CSLUG_DEF void cslug_free_buffers(stbtt_fontinfo *info, cslug_buffers *buffers) {
     STBTT_free(buffers->curves.ptr, info->userdata);
     STBTT_free(buffers->bands.ptr, info->userdata);
