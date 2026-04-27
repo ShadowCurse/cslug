@@ -6,8 +6,14 @@
 typedef          int    cslug_i32;
 typedef unsigned int    cslug_u32;
 typedef unsigned short  cslug_u16;
-typedef _Float16        cslug_f16;
 typedef float           cslug_f32;
+
+// If defined, removes the need to link agains compiler-rt
+#ifdef CSLUG_IMPL_F16
+typedef cslug_u16       cslug_f16;
+#else
+typedef _Float16        cslug_f16;
+#endif
 
 typedef struct {
     cslug_f32 x0, y0, x1, y1;          // em-space bounding box
@@ -78,6 +84,79 @@ CSLUG_DEF void cslug_build_glyph_for_buffer(stbtt_fontinfo *info, cslug_u32 code
 #define CSLUG_fmaxf(a, b) fmaxf(a, b)
 #endif
 
+#ifdef CSLUG_IMPL_F16
+static cslug_f16 cslug_f32_to_f16(cslug_f32 v) {
+    cslug_u32 i = *(cslug_u32*)&v;
+
+    cslug_u32 s = (i >> 31) & 0x00000001;
+    cslug_u32 e = (i >> 23) & 0x000000FF;
+    cslug_u32 m = i & 0x007FFFFF;
+
+    cslug_u16 res_s = (uint16_t)s << 15;
+    cslug_u16 res_e = 0;
+    cslug_u16 res_m = 0;
+
+    if (e == 0xFF) {
+        // NaN or Infinity
+        res_e = 0x1F;
+        res_m = (m != 0) ? 0x0200 : 0;
+    } else {
+        cslug_i32 new_e = (cslug_i32)e - 112;
+
+        if (31 <= new_e) {
+            // Overflow to Infinity
+            res_e = 0x1F;
+        } else if (new_e <= 0) {
+            // Underflow: Subnormal or Zero
+            if (-10 <= new_e) {
+                m |= 0x00800000; // Add implicit leading bit
+                res_m = (uint16_t)(m >> (14 - new_e));
+            }
+        } else {
+            // Normalized conversion
+            res_e = (uint16_t)new_e;
+            res_m = (uint16_t)(m >> 13);
+        }
+    }
+    return res_s | (res_e << 10) | res_m;
+}
+static inline cslug_f16 cslug_u32_to_f16(cslug_u32 v) {
+  if (v == 0) return 0x0000;
+  if (65504 < v) return 0x7C00;
+
+  int msb = 31 - __builtin_clz(v);
+  // f16 has bias of 15
+  cslug_u32 exp = msb + 15;
+
+  // f16 has 10 bits of fraction. The implicit bit is at index `msb`.
+  cslug_u32 mantissa;
+  if (msb <= 10) {
+      // Shift left to align with 10-bit mantissa field
+      mantissa = (v ^ (1u << msb)) << (10 - msb);
+  } else {
+      // Losing precision
+      cslug_u32 shift = msb - 10;
+      cslug_u32 round_bit = (v >> (shift - 1)) & 1;
+      cslug_u32 sticky_bit = (v & ((1u << (shift - 1)) - 1)) != 0;
+      mantissa = (v >> shift) & 0x3FF;
+      // Rounding logic
+      if (round_bit && (sticky_bit || (mantissa & 1))) {
+          mantissa++;
+          if (0x3FF < mantissa) {
+              mantissa = 0;
+              exp++;
+          }
+      }
+  }
+  return (cslug_u16)((exp << 10) | mantissa);
+}
+#else
+static inline cslug_f16 cslug_f32_to_f16(cslug_f32 v) { return (cslug_f16)v; }
+static inline cslug_f16 cslug_u32_to_f16(cslug_u32 v) { return (cslug_f16)v; }
+#endif
+
+static inline cslug_u16 cslug_u32_to_u16(cslug_u32 v) { return (cslug_u16)v; }
+
 CSLUG_DEF void cslug_free_buffers(stbtt_fontinfo *info, cslug_buffers *buffers) {
     STBTT_free(buffers->curves.ptr, info->userdata);
     STBTT_free(buffers->bands.ptr, info->userdata);
@@ -107,7 +186,7 @@ static void cslug_buf_ensure_capacity(stbtt_fontinfo *info, cslug_buf_f16 *buf, 
 
 static void cslug_buf_add_curve(cslug_buf_f16 *buf, cslug_curve curve, cslug_u32 n) {
     for (cslug_u32 i = 0; i < 6; i++) {
-        buf->ptr[buf->len + i] = (cslug_f16)*((cslug_f32*)&curve + i);
+        buf->ptr[buf->len + i] = cslug_f32_to_f16(*((cslug_f32*)&curve + i));
     }
     for (cslug_u32 i = 6; i < n; i++) {
         buf->ptr[buf->len + i] = (cslug_f16)0;
@@ -183,7 +262,7 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
 //
 // Curve index = curves.len / (CURVE_STRIDE / 2)
 // Band index  = bands.len / BAND_STRIDE
-#define cslug_build_glyph(CURVE_STRIDE, BAND_STRIDE, BAND_TYPE)                                       \
+#define cslug_build_glyph(CURVE_STRIDE, BAND_STRIDE, U32_TO_BAND_TYPE)                                \
     *glyph = (cslug_glyph){0};                                                                        \
     cslug_u32 gi = stbtt_FindGlyphIndex(info, code_point);                                            \
                                                                                                       \
@@ -259,14 +338,14 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
         cslug_sort_ascend(band_indexes, band_maximums, cnt);                                          \
         cslug_u32 off = (buffers->bands.len - band_hdr_offset) / (BAND_STRIDE);                       \
         cslug_u32 hi  = band_hdr_offset + b * (BAND_STRIDE);                                          \
-        buffers->bands.ptr[hi + 0] = (BAND_TYPE)cnt;                                                  \
-        buffers->bands.ptr[hi + 1] = (BAND_TYPE)off;                                                  \
+        buffers->bands.ptr[hi + 0] = U32_TO_BAND_TYPE(cnt);                                           \
+        buffers->bands.ptr[hi + 1] = U32_TO_BAND_TYPE(off);                                           \
         for (cslug_u32 i = 0; i < cnt; i++) {                                                         \
             cslug_u32 bi = buffers->bands.len;                                                        \
-            buffers->bands.ptr[bi + 0] = (BAND_TYPE)curve_indexes[band_indexes[i]];                   \
-            buffers->bands.ptr[bi + 1] = (BAND_TYPE)0;                                                \
+            buffers->bands.ptr[bi + 0] = U32_TO_BAND_TYPE(curve_indexes[band_indexes[i]]);            \
+            buffers->bands.ptr[bi + 1] = U32_TO_BAND_TYPE(0);                                         \
             for (cslug_u32 p = 2; p < (BAND_STRIDE); p++)                                             \
-                buffers->bands.ptr[bi + p] = (BAND_TYPE)0;                                            \
+                buffers->bands.ptr[bi + p] = U32_TO_BAND_TYPE(0);                                     \
             buffers->bands.len += (BAND_STRIDE);                                                      \
         }                                                                                             \
     }                                                                                                 \
@@ -289,14 +368,14 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
         cslug_sort_ascend(band_indexes, band_maximums, cnt);                                          \
         cslug_u32 off = (buffers->bands.len - band_hdr_offset) / (BAND_STRIDE);                       \
         cslug_u32 hi  = band_hdr_offset + (n_hbands + b) * (BAND_STRIDE);                             \
-        buffers->bands.ptr[hi + 0] = (BAND_TYPE)cnt;                                                  \
-        buffers->bands.ptr[hi + 1] = (BAND_TYPE)off;                                                  \
+        buffers->bands.ptr[hi + 0] = U32_TO_BAND_TYPE(cnt);                                           \
+        buffers->bands.ptr[hi + 1] = U32_TO_BAND_TYPE(off);                                           \
         for (cslug_u32 i = 0; i < cnt; i++) {                                                         \
             cslug_u32 bi = buffers->bands.len;                                                        \
-            buffers->bands.ptr[bi + 0] = (BAND_TYPE)curve_indexes[band_indexes[i]];                   \
-            buffers->bands.ptr[bi + 1] = (BAND_TYPE)0;                                                \
+            buffers->bands.ptr[bi + 0] = U32_TO_BAND_TYPE(curve_indexes[band_indexes[i]]);            \
+            buffers->bands.ptr[bi + 1] = U32_TO_BAND_TYPE(0);                                         \
             for (cslug_u32 p = 2; p < (BAND_STRIDE); p++)                                             \
-                buffers->bands.ptr[bi + p] = (BAND_TYPE)0;                                            \
+                buffers->bands.ptr[bi + p] = U32_TO_BAND_TYPE(0);                                     \
             buffers->bands.len += (BAND_STRIDE);                                                      \
         }                                                                                             \
     }                                                                                                 \
@@ -307,12 +386,12 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
 
 CSLUG_DEF void cslug_build_glyph_for_texture(stbtt_fontinfo *info, cslug_u32 code_point, cslug_f32 em_scale,
                                              cslug_buffers *buffers, cslug_glyph *glyph) {
-    cslug_build_glyph(8, 4, cslug_f16)
+    cslug_build_glyph(8, 4, cslug_u32_to_f16)
 }
 
 CSLUG_DEF void cslug_build_glyph_for_buffer(stbtt_fontinfo *info, cslug_u32 code_point, cslug_f32 em_scale,
                                             cslug_buffers_packed *buffers, cslug_glyph *glyph) {
-    cslug_build_glyph(6, 2, cslug_u16)
+    cslug_build_glyph(6, 2, cslug_u32_to_u16)
 }
 
 #endif // CSLUG_IMPLEMENTATION
