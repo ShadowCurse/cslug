@@ -4,8 +4,8 @@ pkgs.mkShell {
 
   buildInputs = with pkgs; [
     pkg-config
-    # raylib
 
+    # For raylib build
     libGL
     wayland
     wayland-scanner

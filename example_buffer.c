@@ -9,6 +9,7 @@
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #define CSLUG_IMPLEMENTATION
+#define CSLUG_IMPL_F16
 #include "cslug.h"
 
 #define VERTS_PER_GLYPH 6

@@ -8,7 +8,7 @@ typedef unsigned int    cslug_u32;
 typedef unsigned short  cslug_u16;
 typedef float           cslug_f32;
 
-// If defined, removes the need to link agains compiler-rt
+// If defined, removes the need to link to compiler-rt
 #ifdef CSLUG_IMPL_F16
 typedef cslug_u16       cslug_f16;
 #else
@@ -60,7 +60,7 @@ typedef struct {
 CSLUG_DEF void cslug_free_buffers(stbtt_fontinfo *info, cslug_buffers *buffers);
 CSLUG_DEF void cslug_free_buffers_packed(stbtt_fontinfo *info, cslug_buffers_packed *buffers);
 
-// For RGBA32F textures: curves = 8 f16/curve (2 texels), bands = 4 f16/entry (1 texel)
+// For R16G16B16A16 textures: curves = 8 f16/curve (2 texels), bands = 4 f16/entry (1 texel)
 // Curve index divisor = 4, band index divisor = 4
 CSLUG_DEF void cslug_build_glyph_for_texture(stbtt_fontinfo *info, cslug_u32 code_point, cslug_f32 em_scale,
                                              cslug_buffers *buffers, cslug_glyph *glyph);
