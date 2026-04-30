@@ -84,6 +84,16 @@ CSLUG_DEF void cslug_build_glyph_for_buffer(stbtt_fontinfo *info, cslug_u32 code
 #define CSLUG_fmaxf(a, b) fmaxf(a, b)
 #endif
 
+#ifndef CSLUG_ceilf
+#include <math.h>
+#define CSLUG_ceilf(a) ceilf(a)
+#endif
+
+#ifndef CSLUG_sqrtf
+#include <math.h>
+#define CSLUG_sqrtf(a) sqrtf(a)
+#endif
+
 #ifdef CSLUG_IMPL_F16
 static cslug_f16 cslug_f32_to_f16(cslug_f32 v) {
     cslug_u32 i = *(cslug_u32*)&v;
@@ -284,7 +294,9 @@ static cslug_u32 cslug_extract_curves(stbtt_fontinfo *info, cslug_u32 glyph_inde
                                                                                                       \
     cslug_buf_ensure_capacity(info, &buffers->curves, n_curves * (CURVE_STRIDE));                     \
                                                                                                       \
-    cslug_u32 n_hbands = (cslug_u32)fmaxf(1, fminf(16, ceilf(sqrtf((cslug_f32)n_curves))));           \
+    cslug_u32 n_hbands = (cslug_u32)CSLUG_fmaxf(1.0f,                                                 \
+                                    CSLUG_fminf(16.0f,                                                \
+                                    CSLUG_ceilf(CSLUG_sqrtf((cslug_f32)n_curves))));                  \
     cslug_u32 n_vbands = n_hbands;                                                                    \
     cslug_u32 total_bands = n_hbands + n_vbands;                                                      \
                                                                                                       \
